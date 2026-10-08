@@ -892,10 +892,7 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
   std::string ver_date = ver_date_match.str(1);  // Empty if no match.
 
   // "Label - value" rows; ScreenRecoveryUI draws them as a card.
-  std::string rr_version = android::base::GetProperty("ro.rr.version", "");
-  std::string version = rr_version.empty()
-                            ? android::base::GetProperty("ro.lineage.build.version", "(unknown)")
-                            : "Resurrected Remix " + rr_version;
+  std::string version = "Resurrected Remix";
   if (!ver_date.empty()) version += " (" + ver_date + ")";
   std::vector<std::string> title_lines = { "Version - " + version };
   title_lines.push_back("Device - " + android::base::GetProperty("ro.product.device", ""));
