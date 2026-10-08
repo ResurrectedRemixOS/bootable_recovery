@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <thread>
@@ -183,6 +184,12 @@ int TextMenu::DrawHeader(int x, int y) const {
   return offset;
 }
 
+// Rows that erase data read in the danger color until selected.
+static bool IsDestructiveItem(const std::string& item) {
+  return android::base::StartsWith(item, "Format data") ||
+         android::base::StartsWith(item, "Wipe data");
+}
+
 int TextMenu::DrawItems(int x, int y, int screen_width, bool long_press) const {
   int horizontal_rule_height = 8;
   int offset = 0;
@@ -205,8 +212,10 @@ int TextMenu::DrawItems(int x, int y, int screen_width, bool long_press) const {
     int bar_height = padding + char_height_ + padding;
     draw_funcs_.DrawHighlightBar(padding + x, y + offset, screen_width - (padding + x) * 2, bar_height);
 
-    draw_funcs_.SetColor(selected ? UIElement::MENU_SEL_FG : UIElement::MENU);
-    offset += draw_funcs_.DrawTextLine(padding * 2 + x, y + offset, TextItem(i), false /* bold */);
+    draw_funcs_.SetColor(selected                       ? UIElement::MENU_SEL_FG
+                         : IsDestructiveItem(TextItem(i)) ? UIElement::MENU_DANGER
+                                                          : UIElement::MENU);
+    offset += draw_funcs_.DrawTextLine(padding * 2 + x, y + offset, TextItem(i), selected);
     offset += spacing;
   }
   offset += horizontal_rule_height;
@@ -581,57 +590,56 @@ void ScreenRecoveryUI::draw_foreground_locked() {
   }
 }
 
-/* recovery dark:  #7C4DFF
-   recovery light: #F890FF
-   fastbootd dark: #E65100
-   fastboot light: #FDD835 */
+/* recovery accent:  #E02437
+   fastbootd accent: #F5A623
+   Art in res-<density>/images comes from rr-logos/make_recovery.py with the same colors. */
 void ScreenRecoveryUI::SetColor(UIElement e) const {
+  const bool fastbootd = fastbootd_logo_enabled_;
   switch (e) {
     case UIElement::BATTERY_LOW:
-      if (fastbootd_logo_enabled_)
-        gr_color(0xfd, 0x35, 0x35, 255);
-      else
-        gr_color(0xc7, 0x15, 0x85, 255);
+    case UIElement::MENU_DANGER:
+      gr_color(0xff, 0x7a, 0x86, 255);
       break;
     case UIElement::INFO:
-      if (fastbootd_logo_enabled_)
-        gr_color(0xfd, 0xd8, 0x35, 255);
-      else
-        gr_color(0xf8, 0x90, 0xff, 255);
+      gr_color(0x9c, 0x9c, 0xa5, 255);
       break;
+    case UIElement::INFO_VALUE:
     case UIElement::HEADER:
-      if (fastbootd_logo_enabled_)
-        gr_color(0xfd, 0xd8,0x35, 255);
-      else
-        gr_color(0xf8, 0x90, 0xff, 255);
+      gr_color(0xf2, 0xf2, 0xf4, 255);
       break;
     case UIElement::MENU:
-      gr_color(0xd8, 0xd8, 0xd8, 255);
+      gr_color(0xed, 0xed, 0xf0, 255);
       break;
     case UIElement::MENU_BG:
-      if (fastbootd_logo_enabled_)
-        gr_color(0xe6 * 0.20, 0x51 * 0.20, 0x00 * 0.20, 255);
-      else
-        gr_color(0x7c * 0.20, 0x4d * 0.20, 0xff * 0.20, 255);
+      gr_color(0x18, 0x18, 0x1c, 255);
+      break;
+    case UIElement::CARD:
+      gr_color(0x11, 0x11, 0x14, 255);
+      break;
+    case UIElement::CHIP:
+      gr_color(0x1c, 0x1c, 0x20, 255);
       break;
     case UIElement::MENU_SEL_BG:
     case UIElement::SCROLLBAR:
-      if (fastbootd_logo_enabled_)
-        gr_color(0xe6, 0x51, 0x00, 255);
+      if (fastbootd)
+        gr_color(0xf5, 0xa6, 0x23, 255);
       else
-        gr_color(0x7c, 0x4d, 0xff, 255);
+        gr_color(0xe0, 0x24, 0x37, 255);
       break;
     case UIElement::MENU_SEL_BG_ACTIVE:
-      gr_color(0, 156, 100, 255);
+      if (fastbootd)
+        gr_color(0xff, 0xc5, 0x5c, 255);
+      else
+        gr_color(0xff, 0x4d, 0x61, 255);
       break;
     case UIElement::MENU_SEL_FG:
-      if (fastbootd_logo_enabled_)
-        gr_color(0, 0, 0, 255);
+      if (fastbootd)
+        gr_color(0x1a, 0x12, 0x00, 255);
       else
-        gr_color(0xd8, 0xd8, 0xd8, 255);
+        gr_color(0xff, 0xff, 0xff, 255);
       break;
     case UIElement::LOG:
-      gr_color(196, 196, 196, 255);
+      gr_color(0xa3, 0xa3, 0xac, 255);
       break;
     case UIElement::TEXT_FILL:
       gr_color(0, 0, 0, 160);
@@ -745,7 +753,61 @@ int ScreenRecoveryUI::DrawHorizontalRule(int y) const {
 void ScreenRecoveryUI::DrawHighlightBar(int x, int y, int width, int height) const {
   if (y + height > ScreenHeight())
     height = ScreenHeight() - y;
-  gr_fill(x, y, x + width, y + height);
+  DrawRoundRect(x, y, width, height, height * 31 / 100);
+}
+
+void ScreenRecoveryUI::DrawRoundRect(int x, int y, int width, int height, int radius) const {
+  if (width <= 0 || height <= 0) return;
+  radius = std::min({ radius, width / 2, height / 2 });
+  if (radius <= 0) {
+    gr_fill(x, y, x + width, y + height);
+    return;
+  }
+  gr_fill(x, y + radius, x + width, y + height - radius);
+  for (int row = 0; row < radius; ++row) {
+    double dy = radius - row - 0.5;
+    int inset = radius - static_cast<int>(std::lround(std::sqrt(radius * radius - dy * dy)));
+    gr_fill(x + inset, y + row, x + width - inset, y + row + 1);
+    gr_fill(x + inset, y + height - row - 1, x + width - inset, y + height - row);
+  }
+}
+
+int ScreenRecoveryUI::DrawInfoCard(int x, int y, const std::vector<std::string>& lines) const {
+  if (lines.empty()) return 0;
+  const int left = x + MenuItemPadding();
+  const int width = ScreenWidth() - left * 2;
+  const int inner = char_width_ * 2;
+  const int row = char_height_ + char_height_ / 2;
+  const int pad = char_height_ / 2;
+  const int height = pad * 2 + row * static_cast<int>(lines.size());
+
+  SetColor(UIElement::CARD);
+  DrawRoundRect(left, y, width, height, std::min(height / 2, char_height_ * 3 / 2));
+
+  int ty = y + pad + (row - char_height_) / 2;
+  for (const auto& line : lines) {
+    size_t split = line.find(" - ");
+    size_t skip = 3;
+    if (split == std::string::npos) {
+      split = line.find(": ");
+      skip = 2;
+    }
+    if (split == std::string::npos) {
+      SetColor(UIElement::INFO_VALUE);
+      DrawTextLine(left + inner, ty, line, false);
+    } else {
+      std::string label = line.substr(0, split);
+      std::string value = line.substr(split + skip);
+      int value_x = left + width - inner - gr_measure(gr_sys_font(), value.c_str());
+      int label_end = left + inner + gr_measure(gr_sys_font(), label.c_str()) + char_width_;
+      SetColor(UIElement::INFO);
+      DrawTextLine(left + inner, ty, label, false);
+      SetColor(UIElement::INFO_VALUE);
+      DrawTextLine(std::max(value_x, label_end), ty, value, true);
+    }
+    ty += row;
+  }
+  return height + char_height_ / 2;
 }
 
 void ScreenRecoveryUI::DrawScrollBar(int y, int height) const {
@@ -863,8 +925,8 @@ void ScreenRecoveryUI::draw_menu_and_text_buffer_locked(
 
     int x = margin_width_ + kMenuIndent;
     if (!title_lines_.empty()) {
-      SetColor(UIElement::INFO);
-      y += DrawTextLines(x, y, title_lines_);
+      y += char_height_ / 2;
+      y += DrawInfoCard(x, y, title_lines_);
     }
     y += menu_->DrawHeader(x, y);
     menu_start_y_ = y + 12; // Skip horizontal rule and some margin
@@ -893,58 +955,51 @@ void ScreenRecoveryUI::draw_menu_and_text_buffer_locked(
 
 // Draws the battery capacity on the screen. Should only be called with updateMutex locked.
 void ScreenRecoveryUI::draw_battery_capacity_locked() {
-  int x;
-  int y = margin_height_ + gr_get_height(lineage_logo_.get());
-  int icon_x, icon_y, icon_h, icon_w;
-
   if (is_battery_less) return;
+  if (!menu_) return;
 
-  // Battery status
   std::string batt_capacity = std::to_string(batt_capacity_) + '%';
+  if (charging_) batt_capacity.push_back('+');
 
-  if (charging_)
-    batt_capacity.push_back('+');
-  else if (batt_capacity.back() == '+')
-    batt_capacity.pop_back();
+  // Pill at the top right: battery icon, then the percentage.
+  const int pad = char_width_;
+  const int text_w = gr_measure(gr_sys_font(), batt_capacity.c_str());
+  const int icon_w = char_width_;
+  const int right = ScreenWidth() - margin_width_ - kMenuIndent;
+  const int pill_w = pad + icon_w + char_width_ / 2 + text_w + pad;
+  const int pill_h = char_height_ + char_height_ / 2;
+  const int pill_x = right - pill_w;
+  const int pill_y = margin_height_;
+  SetColor(UIElement::CHIP);
+  DrawRoundRect(pill_x, pill_y, pill_w, pill_h, pill_h / 2);
 
-  if (menu_) {
-    // Battery icon
-    x = (ScreenWidth() - margin_width_ * 2 - kMenuIndent) - char_width_;
+  const int y = pill_y + (pill_h - char_height_) / 2;
+  int icon_x = pill_x + pad;
+  int icon_y = y;
+  int icon_h = char_height_ / 12;
 
-    SetColor(UIElement::INFO);
+  // Terminal
+  SetColor(UIElement::INFO_VALUE);
+  gr_fill(icon_x + icon_w / 3, icon_y, icon_x + icon_w / 3 + icon_w / 3, icon_y + icon_h);
 
-    // Top
-    icon_x = x + char_width_ / 3;
-    icon_y = y;
-    icon_w = char_width_ / 3;
-    icon_h = char_height_ / 12;
-    gr_fill(icon_x, icon_y, icon_x + icon_w, icon_y + icon_h);
+  // Body
+  icon_y = y + icon_h;
+  icon_h = char_height_ - (char_height_ / 12);
+  gr_fill(icon_x, icon_y, icon_x + icon_w, icon_y + icon_h);
 
-    // Main rect
-    icon_x = x;
-    icon_y = y + icon_h;
-    icon_w = char_width_;
-    icon_h = char_height_ - (char_height_ / 12);
-    gr_fill(icon_x, icon_y, icon_x + icon_w, icon_y + icon_h);
+  // Level
+  int inner_x = icon_x + icon_w / 6;
+  int inner_y = y + char_height_ / 12 * 2;
+  int inner_w = icon_w - (2 * icon_w / 6);
+  int inner_h = char_height_ - (3 * char_height_ / 12);
+  int cap_h = inner_h * batt_capacity_ / 100;
+  SetColor(UIElement::CHIP);
+  gr_fill(inner_x, inner_y, inner_x + inner_w, inner_y + inner_h - cap_h);
+  SetColor(batt_capacity_ <= 15 ? UIElement::BATTERY_LOW : UIElement::MENU_SEL_BG);
+  gr_fill(inner_x, inner_y + inner_h - cap_h, inner_x + inner_w, inner_y + inner_h);
 
-    // Capacity
-    if (batt_capacity_ <= 15) SetColor(UIElement::BATTERY_LOW);
-    icon_x = x + char_width_ / 6;
-    icon_y = y + char_height_ / 12;
-    icon_w = char_width_ - (2 * char_width_ / 6);
-    icon_h = char_height_ - (3 * char_height_ / 12);
-    int cap_h = icon_h * batt_capacity_ / 100;
-    gr_fill(icon_x, icon_y + icon_h - cap_h, icon_x + icon_w, icon_y + icon_h);
-    gr_color(0, 0, 0, 255);
-    gr_fill(icon_x, icon_y, icon_x + icon_w, icon_y + icon_h - cap_h);
-
-    x -= char_width_;  // Separator
-
-    // Battery text
-    SetColor(UIElement::INFO);
-    x -= batt_capacity.size() * char_width_;
-    DrawTextLine(x, icon_y, batt_capacity.c_str(), false);
-  }
+  SetColor(UIElement::INFO_VALUE);
+  DrawTextLine(icon_x + icon_w + char_width_ / 2, y, batt_capacity, true);
 }
 
 // Redraw everything on the screen and flip the screen (make it visible).

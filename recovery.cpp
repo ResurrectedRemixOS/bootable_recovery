@@ -891,15 +891,18 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
   std::regex_search(ver, ver_date_match, std::regex("-(\\d{8}(_\\d{6})?)-"));
   std::string ver_date = ver_date_match.str(1);  // Empty if no match.
 
-  std::vector<std::string> title_lines = {
-    "Version " + android::base::GetProperty("ro.lineage.build.version", "(unknown)") +
-        " (" + ver_date + ")",
-  };
-  title_lines.push_back("Product name - " + android::base::GetProperty("ro.product.device", ""));
+  // "Label - value" rows; ScreenRecoveryUI draws them as a card.
+  std::string rr_version = android::base::GetProperty("ro.rr.version", "");
+  std::string version = rr_version.empty()
+                            ? android::base::GetProperty("ro.lineage.build.version", "(unknown)")
+                            : "Resurrected Remix " + rr_version;
+  if (!ver_date.empty()) version += " (" + ver_date + ")";
+  std::vector<std::string> title_lines = { "Version - " + version };
+  title_lines.push_back("Device - " + android::base::GetProperty("ro.product.device", ""));
   if (android::base::GetBoolProperty("ro.build.ab_update", false)) {
     std::string slot = android::base::GetProperty("ro.boot.slot_suffix", "");
     if (android::base::StartsWith(slot, "_")) slot.erase(0, 1);
-    title_lines.push_back("Active slot: " + slot);
+    title_lines.push_back("Active slot - " + slot);
   }
   ui->SetTitle(title_lines);
 

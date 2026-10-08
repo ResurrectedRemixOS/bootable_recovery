@@ -19,6 +19,7 @@
 
 #include <stdio.h>
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -42,7 +43,11 @@ enum class UIElement {
   SCROLLBAR,
   LOG,
   TEXT_FILL,
-  INFO
+  INFO,
+  INFO_VALUE,
+  CARD,
+  CHIP,
+  MENU_DANGER
 };
 
 // Interface to draw the UI elements on the screen.
@@ -349,7 +354,7 @@ class ScreenRecoveryUI : public RecoveryUI, public DrawInterface {
   }
 
   int MenuItemSpacing() const override {
-    return 8;
+    return std::max(8, menu_char_height_ / 3);
   }
 
  protected:
@@ -438,6 +443,10 @@ class ScreenRecoveryUI : public RecoveryUI, public DrawInterface {
   // Implementation of the draw functions in DrawInterface.
   void SetColor(UIElement e) const override;
   void DrawHighlightBar(int x, int y, int width, int height) const override;
+  // Filled rectangle with round corners (no anti-aliasing; minui only fills rectangles).
+  void DrawRoundRect(int x, int y, int width, int height, int radius) const;
+  // Title lines as a card of "label - value" rows.
+  int DrawInfoCard(int x, int y, const std::vector<std::string>& lines) const;
   void DrawScrollBar(int y, int height) const override;
   int DrawHorizontalRule(int y) const override;
   void DrawSurface(const GRSurface* surface, int sx, int sy, int w, int h, int dx,
