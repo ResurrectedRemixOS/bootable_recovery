@@ -447,6 +447,8 @@ class ScreenRecoveryUI : public RecoveryUI, public DrawInterface {
   void DrawRoundRect(int x, int y, int width, int height, int radius) const;
   // Title lines as a card of "label - value" rows.
   int DrawInfoCard(int x, int y, const std::vector<std::string>& lines) const;
+  // Heading and progress track for the text screen; returns the height used.
+  int DrawProgressCard(int x, int y) const;
   void DrawScrollBar(int y, int height) const override;
   int DrawHorizontalRule(int y) const override;
   void DrawSurface(const GRSurface* surface, int sx, int sy, int w, int h, int dx,

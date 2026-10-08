@@ -810,6 +810,33 @@ int ScreenRecoveryUI::DrawInfoCard(int x, int y, const std::vector<std::string>&
   return height + char_height_ / 2;
 }
 
+int ScreenRecoveryUI::DrawProgressCard(int x, int y) const {
+  const int left = x + MenuItemPadding();
+  const int width = ScreenWidth() - left * 2;
+  const int track_h = std::max(8, char_height_ / 2);
+
+  SetColor(UIElement::HEADER);
+  DrawTextLine(left, y, current_icon_ == ERASING ? "Erasing..." : "Installing update...", true);
+  float p = 0;
+  if (progressBarType == DETERMINATE) {
+    p = std::clamp(progressScopeStart + progress * progressScopeSize, 0.0f, 1.0f);
+    std::string pct = std::to_string(static_cast<int>(p * 100)) + '%';
+    SetColor(UIElement::INFO_VALUE);
+    DrawTextLine(left + width - gr_measure(gr_sys_font(), pct.c_str()), y, pct, true);
+  }
+
+  const int track_y = y + char_height_ + char_height_ / 2;
+  SetColor(UIElement::CHIP);
+  DrawRoundRect(left, track_y, width, track_h, track_h / 2);
+  const int fill = static_cast<int>(p * width);
+  if (fill > 0) {
+    SetColor(UIElement::MENU_SEL_BG);
+    int fill_x = rtl_locale_ ? left + width - std::max(fill, track_h) : left;
+    DrawRoundRect(fill_x, track_y, std::max(fill, track_h), track_h, track_h / 2);
+  }
+  return track_y - y + track_h + char_height_;
+}
+
 void ScreenRecoveryUI::DrawScrollBar(int y, int height) const {
   int x = ScreenWidth() - margin_width_;
   int width = 8;
@@ -937,6 +964,15 @@ void ScreenRecoveryUI::draw_menu_and_text_buffer_locked(
       y += 12; // Skip horizontal rule and some margin
       SetColor(UIElement::INFO);
       y += DrawTextLines(x, y, help_message);
+    }
+  } else {
+    // Log screen (sideload, installs): the logo, then progress while there is any.
+    auto& logo = fastbootd_logo_enabled_ ? fastbootd_logo_ : lineage_logo_;
+    DrawSurface(logo.get(), 0, 0, gr_get_width(logo.get()), gr_get_height(logo.get()),
+                ScreenWidth() / 2 - gr_get_width(logo.get()) / 2, y);
+    y += gr_get_height(logo.get());
+    if (progressBarType != EMPTY) {
+      y += DrawProgressCard(margin_width_ + kMenuIndent, y);
     }
   }
 
